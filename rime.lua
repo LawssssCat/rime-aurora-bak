@@ -18,18 +18,118 @@ Wiki：https://github.com/hchunhui/librime-lua/wiki/Scripting
 -- ------------------------------------------------------------------------------------------------------------
 
 require = require("tools/ext_require")() -- 【全局定义】扩展require以获取请求文件所相对路径的文件
+local null = require("tools/null")
+local ptry = require("tools/ptry")
+local string_helper = require("tools/string_helper")
+local rime_api_helper = require("tools/rime_api_helper")
+
+-- 异常 + stack info
+local function throw_error(...)
+  local msg = string_helper.join({null(...)}, ", ")
+  local trace_info = debug.traceback("------------- debug.traceback ---------------", 2)
+  error(msg.."\n"..trace_info)
+end
+
+local function get_env(args)
+  if(args and type(args)=="table") then
+    local env = nil
+    for i,v in pairs(args) do
+      env = v
+    end
+    if(env and type(env)=="table" and env.engine) then
+      return env
+    end
+  end
+  return nil
+end
+
+-- lua 层面捕获 lua 异常
+local function run_safety(func, component_name, function_name)
+  if(not func) then return nil end
+  return function(...)
+    local args = {...}
+    local clock_start = os.clock()
+    local result = nil
+    ptry(function()
+      result = {func(table.unpack(args))}
+    end)
+    ._catch(function(err)
+      throw_error("error: ", err, "\nresult: ", result, "\nargs:", table.unpack(args))
+    end)
+    local clock_end = os.clock()
+    rime_api_helper:add_component_run_info({
+      component_name = component_name,
+      function_name = function_name,
+      run_duration = clock_end-clock_start,
+      env = get_env(args)
+    })
+    return table.unpack(result)
+  end
+end
+
+-- 规范化全局变量
+local function wrap_component(component_type, component_func, component_name)
+  if(not component_func) then return nil end
+  local t = type(component_func)
+  if(t == "function") then
+    return run_safety(component_func, component_name, "func")
+  elseif(t == "table") then
+    if(component_type=="processor" or component_type=="segmentor" or component_type=="translator") then
+      return {
+        init = run_safety(component_func.init, component_name, "init"),
+        func = run_safety(component_func.func, component_name, "func"),
+        fini = run_safety(component_func.fini, component_name, "fini"),
+      }
+    elseif(component_type=="filter") then
+      return {
+        init = run_safety(component_func.init, component_name, "init"),
+        func = run_safety(component_func.func, component_name, "func"),
+        fini = run_safety(component_func.fini, component_name, "fini"),
+        tags_match = run_safety(component_func.tags_match, component_name, "tags_match"),
+      }
+    end
+    throw_error("error component_type value.", component_func, t, component_type, component_name)
+  end
+  throw_error("error component_func type.", component_func, t, component_type, component_name)
+end
 
 --[[ 提供模块名，自动注册全部 component
   {module_name}_{component}
   e.g. my_symbols_processor
 ]]
-local component_names = {
+local component_name_suffix = {
   "processor", "segmentor", "translator", "filter"
 }
 local function register(module_name)
   local module = require(module_name)
-  for _, name in pairs(component_names) do
-    _G[module_name .. "_" .. name] = module[name]
+  local t = type(module)
+  if(t=="function" or (t=="table" and type(module.func)=="function")) then
+    throw_error(string_helper.join({
+[[error require("]],module_name,[[") return type "function".
+please change the return to be a "table". 
+excepted:
+{
+  filter=<function>, -- key can be "processor", "segmentor", "translator", "filter"
+  or
+  filter={init=<function>,func=<function>,fini=<function>},
+  ...
+}
+actual:
+]], module}, ""))
+  elseif(t == "table") then
+    for i, suffix in pairs(component_name_suffix) do
+      local component_name = module_name .. "_" .. suffix
+      local component_func = module[suffix]
+      local component_type = suffix
+      ptry(function()
+        _G[component_name] = wrap_component(component_type, component_func, component_name)
+      end)
+      ._catch(function(err)
+        throw_error(err, i, component_type, component_func, component_name)
+      end)
+    end
+  else
+    throw_error("error require(\""..module_name.."\") return type \""..t.."\".")
   end
 end
 
@@ -87,7 +187,9 @@ register("my_time")
 
 register("my_version")
 
-register("my_history")
+register("my_history") -- 历史上屏情况
+
+register("my_component") -- 组件运行情况
 
 register("my_url")
 
@@ -104,7 +206,7 @@ register("my_prompt")
 -- （不需要lua也能实现）
 -- 详见 https://github.com/hchunhui/librime-lua/blob/master/sample/lua/reverse.lua
 -- 详见 `lua/reverse.lua`
-py_comment_filter = require("my_reverse")
+-- register("my_reverse")
 
 -- 【功能】：use wildcard to search code
 -- 详见 https://github.com/hchunhui/librime-lua/blob/master/sample/lua/expand_translator.lua

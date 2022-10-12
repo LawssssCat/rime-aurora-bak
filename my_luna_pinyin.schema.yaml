@@ -53,6 +53,9 @@ engine:
   filters: # 四、這批組件過濾翻譯的結果
     __include: patch/ext_filters:/patch/filters
 
+simplifier:
+  __include: patch/ext_filters:/patch/simplifier
+
 speller:
   # alphabet: zyxwvutsrqponmlkjihgfedcba
   # alphabet: zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA # 英文
@@ -107,7 +110,7 @@ recognizer:
     reverse_lookup: "`[a-z]*'?$"
 
 grammar: # 语法模型
-  language: zh-hant-t-essay-bgw
+  language: zh-hant-t-essay-bgc
 
 __patch: # 顺序有讲究
   - patch/my_common:/patch

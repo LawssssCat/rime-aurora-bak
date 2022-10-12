@@ -249,4 +249,69 @@ function helper:regex_match(text, pattern)
   return result
 end
 
+-- ============================================================ 
+-- debug
+-- ============================================================ 
+local component_run_info = {}
+function helper:get_component_run_info()
+  return component_run_info
+end
+function helper:add_component_run_info(info)
+  local component_name = info.component_name
+  local function_name = info.function_name
+  local run_duration = info.run_duration
+  local env = info.env
+  -- info
+  local component_info = component_run_info[component_name]
+  if(not component_info) then
+    component_info = {}
+    component_run_info[component_name] = component_info
+  end
+  -- count
+  local count_key = function_name.."_count"
+  local count = (component_info[count_key] or 0) + 1
+  component_info[count_key] = count
+  -- duration_max
+  local duration_max_key = function_name.."_duration_max"
+  local duration_max = component_info[duration_max_key]
+  if(not duration_max) then
+    duration_max = run_duration
+  else
+    duration_max = math.max(duration_max, run_duration)
+  end
+  component_info[duration_max_key] = duration_max
+  -- duration_min
+  local duration_min_key = function_name.."_duration_min"
+  local duration_min = component_info[duration_min_key]
+  if(not duration_min) then
+    duration_min = run_duration
+  else
+    duration_min = math.min(duration_min, run_duration)
+  end
+  component_info[duration_min_key] = duration_min
+  -- duration_avg
+  local duration_avg_key = function_name.."_duration_avg"
+  local duration_avg = component_info[duration_avg_key]
+  if(not duration_avg) then
+    duration_avg = run_duration
+  else
+    duration_avg = (duration_avg*(count-1)+run_duration)/count
+  end
+  component_info[duration_avg_key] = duration_avg
+  -- duration_lst（latest 最近一次）
+  local duration_lst_key = function_name.."_duration_lst"
+  local duration_lst = run_duration
+  component_info[duration_lst_key] = duration_lst
+  -- 时间太长警告
+  if(run_duration>0.1) then
+    local input = ""
+    if(env) then
+      local context = env.engine.context
+      input = context.input
+    end
+    logger.warn(string.format("component run too long!(time:%0.4fs,input:\"%s\")", run_duration, input), 
+      component_name, function_name, component_info)
+  end
+end
+
 return helper
