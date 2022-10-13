@@ -1,4 +1,12 @@
-# 电脑 rime 极光方案（朙月拼音）
+# 备份 [rime-aurora](https://github.com/LawssssCat/rime-aurora) 方案
+
+方案 rime-aurora 原先引入了大量 dict 文件（200M），后进行了简化（50M）。
+
+为了缩减 rime-aurora 仓库的大小，使用 `git checkout --orphan new_master` 重新构建 master 分支。
+
+此仓库记录旧分支及其修改记录。
+
+# ~~电脑 rime 极光方案（朙月拼音）~~
 
 本项目作用于[rime 输入法](https://rime.im/)（Weasel），对原方案（朙月拼音）进行修改补充。
 
